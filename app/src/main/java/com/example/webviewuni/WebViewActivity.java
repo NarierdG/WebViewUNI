@@ -19,6 +19,9 @@ import androidx.core.content.ContextCompat;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 public class WebViewActivity extends AppCompatActivity {
     private WebView myWebView;
     private static final int REQUEST_CAMERA_PERMISSION = 123;
@@ -100,6 +103,7 @@ public class WebViewActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
         } else {
             IntentIntegrator intentIntegrator = new IntentIntegrator(this);
+            intentIntegrator.setPrompt("Scan a barcode or QRCode");
             intentIntegrator.setOrientationLocked(true);
             intentIntegrator.initiateScan();
         }
@@ -113,25 +117,20 @@ public class WebViewActivity extends AppCompatActivity {
             if (intentResult.getContents() == null) {
                 Toast.makeText(getBaseContext(), "Cancelled", Toast.LENGTH_SHORT).show();
             } else {
-                String qrCodeContent = intentResult.getContents();
+                try {
+                    JSONObject qrCodeData = new JSONObject(intentResult.getContents());
+                    String deveui = qrCodeData.getString("DevEUI");
+                    String appeui = qrCodeData.getString("AppEUI");
+                    String appkey = qrCodeData.getString("AppKey");
 
-                String[] qrCodeData = qrCodeContent.split(",");
-                if (qrCodeData.length == 3) {
-                    int deveui = Integer.parseInt(qrCodeData[0]);
-                    int appeui = Integer.parseInt(qrCodeData[1]);
-                    int appkey = Integer.parseInt(qrCodeData[2]);
-
-                    // Populate the input fields
-                    myWebView.evaluateJavascript(
-                            "(function() {" +
-                                    "  document.querySelector('input[name=\"deveui\"]').value = '" + deveui + "';" +
-                                    "  document.querySelector('input[name=\"appeui\"]').value = '" + appeui + "';" +
-                                    "  document.querySelector('input[name=\"appkey\"]').value = '" + appkey + "';" +
-                                    "})();",
-                            null
-                    );
-                } else {
+                    myWebView.evaluateJavascript("(function() {" +
+                            "document.querySelector('input[name=\"deveui\"]').value='" + deveui + "';" +
+                            "document.querySelector('input[name=\"appeui\"]').value='" + appeui + "';" +
+                            "document.querySelector('input[name=\"appkey\"]').value='" + appkey + "';" +
+                            "})()", null);
+                } catch (JSONException e) {
                     Toast.makeText(getBaseContext(), "Invalid QR code format", Toast.LENGTH_SHORT).show();
+                    e.printStackTrace();
                 }
             }
         } else {
