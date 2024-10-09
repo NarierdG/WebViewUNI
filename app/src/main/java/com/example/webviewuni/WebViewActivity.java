@@ -103,7 +103,7 @@ public class WebViewActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
         } else {
             IntentIntegrator intentIntegrator = new IntentIntegrator(this);
-            intentIntegrator.setPrompt("Scan a barcode or QRCode");
+            intentIntegrator.setPrompt(""); // Тут надпись слева на QR
             intentIntegrator.setOrientationLocked(true);
             intentIntegrator.initiateScan();
         }
