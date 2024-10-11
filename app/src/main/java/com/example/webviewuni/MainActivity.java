@@ -65,6 +65,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        Intent intent = getIntent();
+        if (intent != null) {
+            int errorCode = intent.getIntExtra("error_code", 0);
+            if (errorCode != 0) {
+                logMessage("Ошибка WebView: " + errorCode, Color.RED);
+            }
+        }
+
         openLogButton.setOnClickListener(v -> {
             logCardView.setVisibility(View.VISIBLE);
             infoCardView.setVisibility(View.GONE);
