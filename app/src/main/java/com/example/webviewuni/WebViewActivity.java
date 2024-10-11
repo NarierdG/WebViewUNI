@@ -58,6 +58,15 @@ public class WebViewActivity extends AppCompatActivity {
             super.onPageFinished(view, url);
             checkUrl(view, url);
         }
+
+        @Override
+        public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+            Toast.makeText(WebViewActivity.this, "Error: " + description, Toast.LENGTH_LONG).show();
+            Intent intent = new Intent(WebViewActivity.this, MainActivity.class);
+            intent.putExtra("error_code", errorCode);
+            startActivity(intent);
+            finish();
+        }
     }
 
     private class WebAppInterface {

@@ -24,6 +24,8 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import java.util.List;
+import androidx.cardview.widget.CardView;
+import android.view.View;
 
 public class MainActivity extends AppCompatActivity {
     private static final String WIFI_SSID_PREFIX = "AlertBox-";
@@ -35,8 +37,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
+        super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
@@ -47,23 +49,41 @@ public class MainActivity extends AppCompatActivity {
 
         logTextView = findViewById(R.id.logTextView);
         Button startButton = findViewById(R.id.startButton);
+        Button openLogButton = findViewById(R.id.openLogButton);
+        Button closeLogButton = findViewById(R.id.closeLogButton);
+        Button openInfoButton = findViewById(R.id.openInfoButton);
+        Button closeInfoButton = findViewById(R.id.closeInfoButton);
+        CardView logCardView = findViewById(R.id.logCardView);
+        CardView infoCardView = findViewById(R.id.infoCardView);
+        TextView infoTextView = findViewById(R.id.infoTextView);
+
+        infoTextView.setText(R.string.app_instructions);
+
         startButton.setOnClickListener(v -> {
             if (checkWifiCapabilities()) {
                 connectToWifiAndOpenWebView();
             }
         });
+
+        openLogButton.setOnClickListener(v -> {
+            logCardView.setVisibility(View.VISIBLE);
+            infoCardView.setVisibility(View.GONE);
+        });
+
+        closeLogButton.setOnClickListener(v -> logCardView.setVisibility(View.GONE));
+
+        openInfoButton.setOnClickListener(v -> {
+            infoCardView.setVisibility(View.VISIBLE);
+            logCardView.setVisibility(View.GONE);
+        });
+
+        closeInfoButton.setOnClickListener(v -> infoCardView.setVisibility(View.GONE));
     }
 
     private void logMessage(String message, int color) {
         SpannableString spannableString = new SpannableString(message + "\n");
         spannableString.setSpan(new ForegroundColorSpan(color), 0, message.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         logTextView.append(spannableString);
-    }
-
-
-    private void openInfoWifi() {
-        Intent intent = new Intent(this, InfoWifiActivity.class);
-        startActivity(intent);
     }
 
     private boolean checkWifiCapabilities() {
@@ -73,7 +93,7 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
         if (!wifiManager.isWifiEnabled()) {
-            logMessage("Wi-Fi выключен. Включение...", Color.YELLOW);
+            logMessage("Wi-Fi выключен. Включение...", Color.BLACK);
             wifiManager.setWifiEnabled(true);
         }
         return true;
@@ -90,17 +110,17 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        logMessage("Попытка подключения...", Color.YELLOW);
+        logMessage("Попытка подключения...", Color.BLACK);
         String currentSSID = wifiManager.getConnectionInfo().getSSID();
 
         if (currentSSID != null && currentSSID.startsWith("\"" + WIFI_SSID_PREFIX)) {
-            logMessage("Уже подключен к нужной сети", Color.GREEN);
+            logMessage("Уже подключен к нужной сети", Color.BLACK);
             handler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     openWebView();
                 }
-            }, 500);
+            }, 1000);
             return;
         }
 
@@ -111,12 +131,12 @@ public class MainActivity extends AppCompatActivity {
             for (ScanResult result : results) {
                 if (result.SSID.startsWith(WIFI_SSID_PREFIX)) {
                     targetSSID = result.SSID;
-                    logMessage("Найден нужный SSID: " + targetSSID, Color.GREEN);
+                    logMessage("Найден нужный SSID: " + targetSSID, Color.BLACK);
                     break;
                 }
             }
             if (targetSSID == null) {
-                logMessage("Нужный Wi-Fi не найден", Color.RED);
+                logMessage("Нужный SSID не найден", Color.RED);
                 return;
             }
 
@@ -124,19 +144,20 @@ public class MainActivity extends AppCompatActivity {
             for (WifiConfiguration existingConfig : wifiManager.getConfiguredNetworks()) {
                 if (existingConfig.SSID.equals("\"" + targetSSID + "\"")) {
                     wifiConfig = existingConfig;
-                    logMessage("Найдена существующая конфигурация: " + wifiConfig.SSID, Color.GREEN);
+                    logMessage("Найдена существующая конфигурация: " + wifiConfig.SSID, Color.BLACK);
                     break;
                 }
             }
 
             int netId;
+
             if (wifiConfig == null) {
                 wifiConfig = new WifiConfiguration();
-                wifiConfig.SSID = targetSSID;
+                wifiConfig.SSID = "\"" + targetSSID + "\"";
                 wifiConfig.preSharedKey = "\"" + WIFI_PASSWORD + "\"";
-                logMessage("Создаем новую конфигурацию: " + wifiConfig.SSID + ", " + wifiConfig.preSharedKey, Color.GREEN);
+                logMessage("Создаем новую конфигурацию: " + wifiConfig.SSID + ", " + wifiConfig.preSharedKey, Color.BLACK);
                 netId = wifiManager.addNetwork(wifiConfig);
-                logMessage("Добавляем сеть, netId: " + netId, Color.GREEN);
+                logMessage("Добавляем сеть, netId: " + netId, Color.BLACK);
                 if (netId == -1) {
                     logMessage("Не удалось добавить сеть", Color.RED);
                     showManualConnectionPrompt();
@@ -144,15 +165,15 @@ public class MainActivity extends AppCompatActivity {
                 }
             } else {
                 netId = wifiManager.updateNetwork(wifiConfig);
-                logMessage("Обновляем конфигурацию, netId: " + netId, Color.GREEN);
+                logMessage("Обновляем конфигурацию, netId: " + netId, Color.BLACK);
                 if (netId == -1) {
                     logMessage("Не удалось обновить конфигурацию сети", Color.RED);
                     wifiConfig = new WifiConfiguration();
-                    wifiConfig.SSID = targetSSID;
+                    wifiConfig.SSID = "\"" + targetSSID + "\"";
                     wifiConfig.preSharedKey = "\"" + WIFI_PASSWORD + "\"";
-                    logMessage("Создаем новую конфигурацию: " + wifiConfig.SSID + ", " + wifiConfig.preSharedKey, Color.GREEN);
+                    logMessage("Создаем новую конфигурацию: " + wifiConfig.SSID + ", " + wifiConfig.preSharedKey, Color.BLACK);
                     netId = wifiManager.addNetwork(wifiConfig);
-                    logMessage("Добавляем сеть, netId: " + netId, Color.GREEN);
+                    logMessage("Добавляем сеть, netId: " + netId, Color.BLACK);
                     if (netId == -1) {
                         logMessage("Не удалось добавить сеть", Color.RED);
                         showManualConnectionPrompt();
@@ -162,16 +183,16 @@ public class MainActivity extends AppCompatActivity {
             }
 
             boolean enabled = wifiManager.enableNetwork(netId, true);
-            logMessage("Включаем сеть, enabled: " + enabled, Color.GREEN);
+            logMessage("Включаем сеть, enabled: " + enabled, Color.BLACK);
             if (enabled) {
                 wifiManager.reconnect();
-                logMessage("Подключение к сети " + targetSSID + "...", Color.GREEN);
+                logMessage("Подключение к сети " + targetSSID + "...", Color.BLACK);
                 handler.postDelayed(new Runnable() {
                     @Override
                     public void run() {
                         openWebView();
                     }
-                }, 500);
+                }, 1000);
             } else {
                 logMessage("Не удалось подключиться к сети", Color.RED);
                 showManualConnectionPrompt();
@@ -185,6 +206,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showManualConnectionPrompt() {
+        logMessage("Не удалось подключиться к Wi-Fi. Пожалуйста, подключитесь вручную.", Color.RED);
         Toast.makeText(this, "Не удалось подключиться к Wi-Fi. Пожалуйста, подключитесь вручную.", Toast.LENGTH_LONG).show();
         Intent intent = new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS);
         startActivity(intent);
@@ -198,6 +220,7 @@ public class MainActivity extends AppCompatActivity {
                 connectToWifiAndOpenWebView();
             } else {
                 logMessage("Разрешение на доступ к Wi-Fi не предоставлено", Color.RED);
+                Toast.makeText(this, "Разнерешние на доступ к Wi-FI не предоставлено", Toast.LENGTH_LONG).show();
             }
         }
     }
