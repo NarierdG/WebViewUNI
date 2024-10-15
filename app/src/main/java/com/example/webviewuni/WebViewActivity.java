@@ -104,6 +104,10 @@ public class WebViewActivity extends AppCompatActivity {
                         null
                 );
             }
+        } else if (url.equals("http://wifi.unimon.ru/exit")) {
+            Intent intent = new Intent(WebViewActivity.this, MainActivity.class);
+            startActivity(intent);
+            finish();
         }
     }
 
