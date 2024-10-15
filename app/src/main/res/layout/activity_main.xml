@@ -25,7 +25,7 @@
         android:id="@+id/logoTextv2"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="LoraGate-Version"
+        android:text="LoraGate-App"
         android:textColor="@color/turquoise"
         android:textSize="15sp"
         android:fontFamily="sans-serif-medium"
@@ -99,13 +99,11 @@
                 android:layout_height="0dp"
                 android:layout_weight="1">
 
-                <TextView
-                    android:id="@+id/infoTextView"
+                <WebView
+                    android:id="@+id/infoWebView"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/app_instructions"
-                    android:textSize="16sp"
-                    android:padding="8dp" />
+                    android:layout_height="wrap_content" />
+
             </ScrollView>
 
             <Button
@@ -156,13 +154,29 @@
                     android:scrollbars="vertical" />
             </ScrollView>
 
-            <Button
-                android:id="@+id/closeLogButton"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Close"
+                android:orientation="horizontal"
                 android:layout_gravity="center"
-                android:layout_marginTop="8dp" />
+                android:gravity="center"
+                android:layout_marginTop="8dp">
+
+                <Button
+                    android:id="@+id/closeLogButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Close" />
+
+                <Button
+                    android:id="@+id/cleanLogButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:backgroundTint="@color/red"
+                    android:text="Clean up"
+                    android:layout_marginStart="30dp" />
+
+            </LinearLayout>
 
         </LinearLayout>
 

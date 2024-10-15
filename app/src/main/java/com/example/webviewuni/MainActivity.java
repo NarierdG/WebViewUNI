@@ -13,6 +13,8 @@ import android.os.Handler;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,6 +25,10 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.List;
 import androidx.cardview.widget.CardView;
 import android.view.View;
@@ -31,9 +37,11 @@ public class MainActivity extends AppCompatActivity {
     private static final String WIFI_SSID_PREFIX = "AlertBox-";
     private static final String WIFI_PASSWORD = "boxmaster";
     private static final int WIFI_PERMISSION_REQUEST = 1;
+    private static final String LOG_FILE_NAME = "log.txt";
     private TextView logTextView;
     private WifiManager wifiManager;
     private Handler handler = new Handler();
+    private WebView WebInfo;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,9 +63,14 @@ public class MainActivity extends AppCompatActivity {
         Button closeInfoButton = findViewById(R.id.closeInfoButton);
         CardView logCardView = findViewById(R.id.logCardView);
         CardView infoCardView = findViewById(R.id.infoCardView);
-        TextView infoTextView = findViewById(R.id.infoTextView);
+        Button cleanLogButton = findViewById(R.id.cleanLogButton);
 
-        infoTextView.setText(R.string.app_instructions);
+        WebInfo = findViewById(R.id.infoWebView);
+        WebInfo.loadUrl("file:///android_asset/instrukciia-po-rabote-s-unimon-loragate.html");
+        WebSettings webSettings = WebInfo.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+
+        loadLogsFromFile();
 
         startButton.setOnClickListener(v -> {
             if (checkWifiCapabilities()) {
@@ -79,6 +92,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         closeLogButton.setOnClickListener(v -> logCardView.setVisibility(View.GONE));
+        cleanLogButton.setOnClickListener(v -> clearLogs());
 
         openInfoButton.setOnClickListener(v -> {
             infoCardView.setVisibility(View.VISIBLE);
@@ -92,6 +106,38 @@ public class MainActivity extends AppCompatActivity {
         SpannableString spannableString = new SpannableString(message + "\n");
         spannableString.setSpan(new ForegroundColorSpan(color), 0, message.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         logTextView.append(spannableString);
+        writeLogToFile(message); // Запись сообщения в файл
+    }
+
+    private void writeLogToFile(String message) {
+        try (FileOutputStream fos = openFileOutput(LOG_FILE_NAME, Context.MODE_APPEND)) {
+            fos.write((message + "\n").getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void loadLogsFromFile() {
+        try (FileInputStream fis = openFileInput(LOG_FILE_NAME)) {
+            byte[] buffer = new byte[1024];
+            int length;
+            StringBuilder logBuilder = new StringBuilder();
+            while ((length = fis.read(buffer)) != -1) {
+                logBuilder.append(new String(buffer, 0, length));
+            }
+            logTextView.setText(logBuilder.toString());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void clearLogs() {
+        logTextView.setText("");
+        try (FileOutputStream fos = openFileOutput(LOG_FILE_NAME, Context.MODE_PRIVATE)) {
+            fos.write("".getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private boolean checkWifiCapabilities() {
