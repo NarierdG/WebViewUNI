@@ -63,7 +63,7 @@ public class WebViewActivity extends AppCompatActivity {
         public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
             Toast.makeText(WebViewActivity.this, "Error: " + description, Toast.LENGTH_LONG).show();
             Intent intent = new Intent(WebViewActivity.this, MainActivity.class);
-            intent.putExtra("error_code", errorCode);
+            intent.putExtra("error_code", description);
             startActivity(intent);
             finish();
         }
@@ -116,7 +116,8 @@ public class WebViewActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
         } else {
             IntentIntegrator intentIntegrator = new IntentIntegrator(this);
-            intentIntegrator.setPrompt(""); // Тут надпись слева на QR
+            // Тут можно добавить надпись слева от QR
+            intentIntegrator.setPrompt(""); 
             intentIntegrator.setOrientationLocked(true);
             intentIntegrator.initiateScan();
         }

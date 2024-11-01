@@ -63,7 +63,7 @@
         android:id="@+id/openLogButton"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:backgroundTint="@color/light_gray"
+        android:backgroundTint="@color/colorAccent"
         android:text="!"
         android:textSize="18sp"
         android:gravity="center"

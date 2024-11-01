@@ -2,12 +2,15 @@ package com.example.webviewuni;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
-import android.net.wifi.ScanResult;
+import android.net.wifi.WifiNetworkSuggestion;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.Spannable;
@@ -19,6 +22,7 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.EdgeToEdge;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -27,13 +31,14 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
-
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.List;
 import androidx.cardview.widget.CardView;
 import android.view.View;
+import java.util.ArrayList;
+import java.util.List;
+
 
 public class MainActivity extends AppCompatActivity {
     private static final String WIFI_SSID_PREFIX = "AlertBox-";
@@ -47,8 +52,11 @@ public class MainActivity extends AppCompatActivity {
     private int ssidFoundCount = 0;
     private Button openInfoButton;
     private Button startButton;
+    private CardView logCardView;
+    private CardView infoCardView;
     private TextView statusTextView;
     private Runnable connectionRunnable;
+    private String targetSSID = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,8 +76,8 @@ public class MainActivity extends AppCompatActivity {
         Button closeLogButton = findViewById(R.id.closeLogButton);
         openInfoButton = findViewById(R.id.openInfoButton);
         Button closeInfoButton = findViewById(R.id.closeInfoButton);
-        CardView logCardView = findViewById(R.id.logCardView);
-        CardView infoCardView = findViewById(R.id.infoCardView);
+        logCardView = findViewById(R.id.logCardView);
+        infoCardView = findViewById(R.id.infoCardView);
         Button cleanLogButton = findViewById(R.id.cleanLogButton);
         statusTextView = findViewById(R.id.statusTextView);
 
@@ -82,19 +90,16 @@ public class MainActivity extends AppCompatActivity {
 
         startButton.setOnClickListener(v -> {
             startButton.setEnabled(false);
-            statusTextView.setText("Connection - 1..");
+            statusTextView.setText("Connection: 1..");
 
             connectionRunnable = new Runnable() {
                 @Override
                 public void run() {
                     if (checkWifiCapabilities()) {
-                        if (connectToWifiAndOpenWebView() != 0) {
-                            statusTextView.setText("Connection - ERROR");
-                            resetStatusAndButton();
-                        }
+                        targetSSID = null;
+                        connectToWifiAndOpenWebView();
                     } else {
-                        statusTextView.setText("Connection - ERROR");
-                        resetStatusAndButton();
+                        resetApp();
                     }
                 }
             };
@@ -104,9 +109,9 @@ public class MainActivity extends AppCompatActivity {
 
         Intent intent = getIntent();
         if (intent != null) {
-            int errorCode = intent.getIntExtra("error_code", 0);
-            if (errorCode != 0) {
-                logMessage("Error WebView: " + errorCode + " [" + getCurrentDateTime() + "]", Color.RED);
+            String description = intent.getStringExtra("error_code");
+            if (description != null && !description.isEmpty()) {
+                logMessage("[" + getCurrentDateTime() + "] " + "Error WebView: " + description, Color.RED);
             }
         }
 
@@ -124,6 +129,11 @@ public class MainActivity extends AppCompatActivity {
         });
 
         closeInfoButton.setOnClickListener(v -> infoCardView.setVisibility(View.GONE));
+    }
+
+    private void resetApp(){
+        statusTextView.setText("Connection: ERROR");
+        resetStatusAndButton();
     }
 
     private void resetStatusAndButton() {
@@ -183,11 +193,11 @@ public class MainActivity extends AppCompatActivity {
     private boolean checkWifiCapabilities() {
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         if (wifiManager == null) {
-            logMessage("The Wi-Fi Manager is unavailable." + " [" + getCurrentDateTime() + "]", Color.RED);
+            logMessage("[" + getCurrentDateTime() + "] " + "The Wi-Fi Manager is unavailable", Color.RED);
             return false;
         }
         if (!wifiManager.isWifiEnabled()) {
-            logMessage("Wi-Fi is turned off. Enabling..." + " [" + getCurrentDateTime() + "]", Color.BLACK);
+            logMessage("[" + getCurrentDateTime() + "] " + "Wi-Fi is disabled. An attempt to enable it..", Color.BLACK);
             wifiManager.setWifiEnabled(true);
         }
         return true;
@@ -199,139 +209,6 @@ public class MainActivity extends AppCompatActivity {
         return sdf.format(calendar.getTime());
     }
 
-    private int connectToWifiAndOpenWebView() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, WIFI_PERMISSION_REQUEST);
-            return 1;
-        }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE}, WIFI_PERMISSION_REQUEST);
-            return 1;
-        }
-
-        logMessage("Connection attempt..." + " [" + getCurrentDateTime() + "]", Color.BLACK);
-        String currentSSID = wifiManager.getConnectionInfo().getSSID();
-
-        if (currentSSID != null && currentSSID.startsWith("\"" + WIFI_SSID_PREFIX)) {
-            logMessage("Already connected to the desired network." + " [" + getCurrentDateTime() + "]", Color.BLACK);
-            connectionRunnable = new Runnable() {
-                @Override
-                public void run() {
-                    statusTextView.setText("Connection - RUN");
-                    openWebView();
-                }
-            };
-            handler.postDelayed(connectionRunnable, 1000);
-            return 0;
-        }
-
-        wifiManager.startScan();
-        List<ScanResult> results = wifiManager.getScanResults();
-        String targetSSID = null;
-        for (ScanResult result : results) {
-            if (result.SSID.startsWith(WIFI_SSID_PREFIX)) {
-                targetSSID = result.SSID;
-                logMessage("The required SSID was found: " + targetSSID + " [" + getCurrentDateTime() + "]", Color.BLACK);
-                break;
-            }
-        }
-        if (targetSSID == null) {
-            ssidFoundCount += 1;
-            logMessage("The required SSID was not found." + " [" + getCurrentDateTime() + "]", Color.RED);
-            return 1;
-        }
-
-        WifiConfiguration wifiConfig = null;
-        for (WifiConfiguration existingConfig : wifiManager.getConfiguredNetworks()) {
-            if (existingConfig.SSID.equals("\"" + targetSSID + "\"")) {
-                wifiConfig = existingConfig;
-                logMessage("An existing configuration was found: " + wifiConfig.SSID + " [" + getCurrentDateTime() + "]", Color.BLACK);
-                break;
-            }
-        }
-
-        int netId;
-
-        connectionRunnable = new Runnable() {
-            @Override
-            public void run() {
-                statusTextView.setText("Connection - 1..2..");
-            }
-        };
-        handler.postDelayed(connectionRunnable, 500);
-
-        if (wifiConfig == null) {
-            wifiConfig = new WifiConfiguration();
-            wifiConfig.SSID = "\"" + targetSSID + "\"";
-            wifiConfig.preSharedKey = "\"" + WIFI_PASSWORD + "\"";
-            logMessage("Creating a new configuration: " + wifiConfig.SSID + ", " + wifiConfig.preSharedKey + " [" + getCurrentDateTime() + "]", Color.BLACK);
-            netId = wifiManager.addNetwork(wifiConfig);
-            logMessage("Adding a network, netId: " + netId + " [" + getCurrentDateTime() + "]", Color.BLACK);
-            if (netId == -1) {
-                logMessage("Failed to add network" + " [" + getCurrentDateTime() + "]", Color.RED);
-                showManualConnectionPrompt();
-                return 1;
-            }
-        } else {
-            netId = wifiManager.updateNetwork(wifiConfig);
-            logMessage("Updating the configuration, netId: " + netId + " [" + getCurrentDateTime() + "]", Color.BLACK);
-            if (netId == -1) {
-                logMessage("The network configuration could not be updated." + " [" + getCurrentDateTime() + "]", Color.RED);
-                wifiConfig = new WifiConfiguration();
-                wifiConfig.SSID = "\"" + targetSSID + "\"";
-                wifiConfig.preSharedKey = "\"" + WIFI_PASSWORD + "\"";
-                logMessage("Creating a new configuration: " + wifiConfig.SSID + ", " + wifiConfig.preSharedKey + " [" + getCurrentDateTime() + "]", Color.BLACK);
-                netId = wifiManager.addNetwork(wifiConfig);
-                logMessage("Adding a network, netId: " + netId + " [" + getCurrentDateTime() + "]", Color.BLACK);
-                if (netId == -1) {
-                    logMessage("Failed to add network." + " [" + getCurrentDateTime() + "]", Color.RED);
-                    showManualConnectionPrompt();
-                    return 1;
-                }
-            }
-        }
-
-        boolean enabled = wifiManager.enableNetwork(netId, true);
-        logMessage("Turning on the network, enabled: " + enabled + " [" + getCurrentDateTime() + "]", Color.BLACK);
-        if (enabled) {
-            wifiManager.reconnect();
-            logMessage("Connecting to the network. " + targetSSID + "..." + " [" + getCurrentDateTime() + "]", Color.BLACK);
-            connectionRunnable = new Runnable() {
-                @Override
-                public void run() {
-                    statusTextView.setText("Connection - 1..2..3");
-                }
-            };
-            handler.postDelayed(connectionRunnable, 500);
-            connectionRunnable = new Runnable() {
-                @Override
-                public void run() {
-                    statusTextView.setText("Connection - RUN");
-                    openWebView();
-                }
-            };
-            handler.postDelayed(connectionRunnable, 1000);
-        } else {
-            logMessage("Couldn't connect to the network." + " [" + getCurrentDateTime() + "]", Color.RED);
-            showManualConnectionPrompt();
-            return 1;
-        }
-        return 0;
-    }
-
-    private void openWebView() {
-        Intent intent = new Intent(this, WebViewActivity.class);
-        startActivity(intent);
-    }
-
-    private void showManualConnectionPrompt() {
-        logMessage("Couldn't connect to Wi-Fi. Please connect manually.." + " [" + getCurrentDateTime() + "]", Color.RED);
-        Toast.makeText(this, "Couldn't connect to Wi-Fi. Please connect manually." + " [" + getCurrentDateTime() + "]", Toast.LENGTH_LONG).show();
-        Intent intent = new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS);
-        startActivity(intent);
-    }
-
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -339,9 +216,257 @@ public class MainActivity extends AppCompatActivity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 connectToWifiAndOpenWebView();
             } else {
-                logMessage("Permission to access Wi-Fi has not been granted." + " [" + getCurrentDateTime() + "]", Color.RED);
-                Toast.makeText(this, "Permission to access Wi-Fi has not been granted." + " [" + getCurrentDateTime() + "]", Toast.LENGTH_LONG).show();
+                logMessage("[" + getCurrentDateTime() + "] " + "Permission to access Wi-Fi has not been granted", Color.RED);
+                Toast.makeText(this, "Permission to access Wi-Fi has not been granted", Toast.LENGTH_LONG).show();
             }
         }
+    }
+
+    private void showWifiSelectionDialog(List<String> ssidList) {
+        final boolean[] selectionMade = {false};
+        final long timeout = 10000;
+        String[] ssidArray = ssidList.toArray(new String[0]);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Select Wi-Fi:")
+                .setItems(ssidArray, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        targetSSID = ssidArray[which];
+                        logMessage("[" + getCurrentDateTime() + "]" + "Selected Wi-Fi: " + targetSSID, Color.BLACK);
+                        selectionMade[0] = true;
+                        connectToWifiAndOpenWebView2(true);
+                        dialog.dismiss();
+                    }
+                });
+
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(dialogInterface -> {
+            new Thread(() -> {
+                try {
+                    Thread.sleep(timeout);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                if (!selectionMade[0]) {
+                    runOnUiThread(() -> {
+                        logMessage("[" + getCurrentDateTime() + "]" + "No Wi-Fi selected, operation timed out.", Color.RED);
+                        connectToWifiAndOpenWebView2(false);
+                        dialog.dismiss();
+                    });
+                }
+            }).start();
+        });
+
+        infoCardView.setVisibility(View.GONE);
+        logCardView.setVisibility(View.GONE);
+
+        dialog.show();
+    }
+
+    private void connectToWifiAndOpenWebView() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, WIFI_PERMISSION_REQUEST);
+            resetApp();
+            return;
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE}, WIFI_PERMISSION_REQUEST);
+            resetApp();
+            return;
+        }
+
+        logMessage("[" + getCurrentDateTime() + "] " + "Connection attempt...", Color.BLACK);
+        String currentSSID = wifiManager.getConnectionInfo().getSSID();
+
+        if (currentSSID != null && currentSSID.startsWith("\"" + WIFI_SSID_PREFIX)) {
+            logMessage("[" + getCurrentDateTime() + "] " + "Already connected to the desired Wi-Fi", Color.BLACK);
+
+            connectionRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    statusTextView.setText("Connection: RUN");
+                    openWebView();
+                }
+            };
+            handler.postDelayed(connectionRunnable, 1500);
+
+            return;
+        }
+
+        wifiManager.startScan();
+
+        List<ScanResult> results = wifiManager.getScanResults();
+        List<String> matchingSSIDs = new ArrayList<>();
+
+        for (ScanResult result : results) {
+            if (result.SSID.startsWith(WIFI_SSID_PREFIX)) {
+                matchingSSIDs.add(result.SSID);
+            }
+        }
+
+        if (matchingSSIDs.isEmpty()) {
+            logMessage("[" + getCurrentDateTime() + "]" + "LoraGate Wi-Fi not found", Color.RED);
+            resetApp();
+        } else if (matchingSSIDs.size() == 1) {
+            targetSSID = matchingSSIDs.get(0);
+            logMessage("[" + getCurrentDateTime() + "]" + "LoraGate Wi-Fi has been found: " + targetSSID, Color.BLACK);
+            connectToWifiAndOpenWebView2(true);
+        } else {
+            showWifiSelectionDialog(matchingSSIDs);
+        }
+    }
+
+    private void connectToWifiAndOpenWebView2(boolean check_arr_wifi) {
+        if (!check_arr_wifi) {
+            resetApp();
+            return;
+        }
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, WIFI_PERMISSION_REQUEST);
+            resetApp();
+            return;
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_WIFI_STATE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_WIFI_STATE}, WIFI_PERMISSION_REQUEST);
+            resetApp();
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= 29) {
+            WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+
+            if (!wifiManager.isWifiEnabled()) {
+                Intent intent = new Intent(WifiManager.ACTION_PICK_WIFI_NETWORK);
+                startActivity(intent);
+            } else {
+                WifiNetworkSuggestion suggestion = new WifiNetworkSuggestion.Builder()
+                        .setSsid(targetSSID)
+                        .setWpa2Passphrase(WIFI_PASSWORD)
+                        .build();
+
+                List<WifiNetworkSuggestion> suggestionsList = new ArrayList<>();
+                suggestionsList.add(suggestion);
+
+                int status = wifiManager.addNetworkSuggestions(suggestionsList);
+                if (status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
+                    logMessage("[" + getCurrentDateTime() + "]" + "Wi-Fi suggestion added successfully.", Color.BLACK);
+                    connectionRunnable = new Runnable() {
+                        @Override
+                        public void run() {
+                            statusTextView.setText("Connection: RUN");
+                            openWebView();
+                        }
+                    };
+                    handler.postDelayed(connectionRunnable, 1500);
+                } else {
+                    logMessage("[" + getCurrentDateTime() + "]" + "Failed to add Wi-Fi suggestion: " + status, Color.RED);
+                    resetApp();
+                }
+            }
+        } else {
+            WifiConfiguration wifiConfig = null;
+            for (WifiConfiguration existingConfig : wifiManager.getConfiguredNetworks()) {
+                if (existingConfig.SSID.equals("\"" + targetSSID + "\"")) {
+                    wifiConfig = existingConfig;
+                    logMessage("[" + getCurrentDateTime() + "] " + "An existing configuration was found: " + wifiConfig.SSID, Color.BLACK);
+                    break;
+                }
+            }
+
+            int netId;
+
+            connectionRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    statusTextView.setText("Connection: 1..2..");
+                }
+            };
+            handler.postDelayed(connectionRunnable, 500);
+
+            if (wifiConfig == null) {
+                wifiConfig = new WifiConfiguration();
+                wifiConfig.SSID = "\"" + targetSSID + "\"";
+                wifiConfig.preSharedKey = "\"" + WIFI_PASSWORD + "\"";
+                logMessage("[" + getCurrentDateTime() + "] " + "Creating a new configuration: " + wifiConfig.SSID + ", " + wifiConfig.preSharedKey, Color.BLACK);
+                netId = wifiManager.addNetwork(wifiConfig);
+                logMessage("[" + getCurrentDateTime() + "] " + "Adding a network, netId: " + netId, Color.BLACK);
+                if (netId == -1) {
+                    logMessage("[" + getCurrentDateTime() + "] " + "Failed to add network", Color.RED);
+                    showManualConnectionPrompt();
+                    resetApp();
+                    return;
+                }
+            } else {
+                netId = wifiManager.updateNetwork(wifiConfig);
+                logMessage("[" + getCurrentDateTime() + "] " + "Updating the configuration, netId: " + netId, Color.BLACK);
+                if (netId == -1) {
+                    logMessage("[" + getCurrentDateTime() + "] " + "The network configuration could not be updated.", Color.RED);
+                    wifiConfig = new WifiConfiguration();
+                    wifiConfig.SSID = "\"" + targetSSID + "\"";
+                    wifiConfig.preSharedKey = "\"" + WIFI_PASSWORD + "\"";
+                    logMessage("[" + getCurrentDateTime() + "] " + "Creating a new configuration: " + wifiConfig.SSID + ", " + wifiConfig.preSharedKey, Color.BLACK);
+                    netId = wifiManager.addNetwork(wifiConfig);
+                    logMessage("[" + getCurrentDateTime() + "] " + "Adding a network, netId: " + netId, Color.BLACK);
+                    if (netId == -1) {
+                        logMessage("[" + getCurrentDateTime() + "] " + "Failed to add network.", Color.RED);
+                        showManualConnectionPrompt();
+                        resetApp();
+                        return;
+                    }
+                }
+            }
+
+            boolean enabled = wifiManager.enableNetwork(netId, true);
+            logMessage("[" + getCurrentDateTime() + "] " + "Turning on the network, enabled: " + enabled, Color.BLACK);
+            if (enabled) {
+                String currentSSID = wifiManager.getConnectionInfo().getSSID();
+
+                wifiManager.reconnect();
+
+                logMessage("[" + getCurrentDateTime() + "] " + "Connecting to the network " + targetSSID + "...", Color.BLACK);
+                connectionRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        statusTextView.setText("Connection: 1..2..3");
+                    }
+                };
+                handler.postDelayed(connectionRunnable, 500);
+
+                connectionRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        statusTextView.setText("Connection: RUN");
+                        openWebView();
+                    }
+                };
+                handler.postDelayed(connectionRunnable, 1500);
+            } else {
+                logMessage("[" + getCurrentDateTime() + "] " + "Couldn't connect to the network", Color.RED);
+                showManualConnectionPrompt();
+                resetApp();
+            }
+        }
+    }
+
+    private void openWebView() {
+        Intent intent = new Intent(MainActivity.this, WebViewActivity.class);
+        startActivity(intent);
+        connectionRunnable = new Runnable() {
+            @Override
+            public void run() {
+                resetApp();
+            }
+        };
+        handler.postDelayed(connectionRunnable, 300);
+    }
+
+    private void showManualConnectionPrompt() {
+        logMessage("[" + getCurrentDateTime() + "] " + "Couldn't connect to Wi-Fi. Please connect by hand", Color.RED);
+        Toast.makeText(this, "Couldn't connect to Wi-Fi. Please connect by hand", Toast.LENGTH_LONG).show();
+        Intent intent = new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS);
+        startActivity(intent);
     }
 }
